@@ -43,11 +43,6 @@ def read_data(filename,encoding='utf-8'):
     return corpus_raw
 
 
-# In[3]:
-
-corpus = read_data('got1.txt')
-print('Data sample (First 140 characters):\n%s ...' %corpus[0:140])
-
 
 # # Read several files and merge them into corpus
 
@@ -72,13 +67,6 @@ def read_and_merge_files(filenames,encoding='utf-8'):
     return corpus_raw
 
 
-# In[5]:
-
-filenames = ['got1.txt','tiny_shakespeare.txt']
-corpus = read_and_merge_files(filenames)
-print('Data sample (First and last 140 characters):\n %s // %s' %(corpus[0:140],corpus[-140:]))
-
-
 # # Extract sentences from corpus
 
 # In[6]:
@@ -95,12 +83,6 @@ def extract_sentences(corpus):
     tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
     raw_sentences = tokenizer.tokenize(corpus)
     return raw_sentences
-
-
-# In[7]:
-
-sentences = extract_sentences(corpus=corpus)
-print('The first 5 sentences as sample:\n %s' %(sentences[0:5]))
 
 
 # # Extract word from corpus
@@ -121,12 +103,6 @@ def extract_words(corpus):
     return words
 
 
-# In[9]:
-
-vocab = extract_words(corpus=corpus)
-print('The first 10 words as sample:\n %s' %(vocab[0:10]))
-
-
 # # Exract characters from corpus
 
 # In[10]:
@@ -144,11 +120,6 @@ def extract_characters(corpus):
         chars.extend(line)
     return chars
 
-
-# In[11]:
-
-characters = extract_characters(corpus)
-print('The first 140 characters as sample:\n %s' %(characters[0:25]))
 
 
 # # Extract unique word from corpus
@@ -170,12 +141,6 @@ def extract_unique_words(corpus):
     return list(set(words))
 
 
-# In[13]:
-
-unique_words = extract_unique_words(corpus)
-print('Size of vocabulary (words): %d' %len(unique_words))
-print('The first 10 words as sample:\n %s' %(unique_words[0:10]))
-
 
 # # Extract unique characters from corpus
 
@@ -193,12 +158,6 @@ def extract_unique_characters(corpus):
     return list(set(corpus))
 
 
-# In[15]:
-
-unique_characters = extract_unique_characters(corpus)
-print('Size of vocabulary (characters): %d' %len(unique_characters))
-print('The first 10 characters as sample:\n %s' %(unique_characters[0:10]))
-
 
 # # Vocab to ID & ID to Vocab DICTIONARIES
 
@@ -214,47 +173,6 @@ def create_dictionaries(vocab):
     id_to_vocab = {i:ch for i,ch in enumerate(vocab)}
     vocab_to_id = {ch:i for i,ch in enumerate(vocab)}
     return id_to_vocab,vocab_to_id
-
-
-# With **words**
-
-# In[17]:
-
-import itertools
-import collections
-
-id_to_vocab,vocab_to_id = create_dictionaries(vocab=unique_words)
-
-print('The first 4 elements of dict [id_to_vocab] as sample:')
-x = itertools.islice(id_to_vocab.items(), 0, 4)
-for key, value in x:
-    print (key, value)
-    
-print('\nThe first 4 elements of dict [vocab_to_id] as sample:')
-y = itertools.islice(vocab_to_id.items(), 0, 4)
-for key, value in y:
-    print (key, value)
-    
-
-
-# With **characters**
-
-# In[18]:
-
-import itertools
-import collections
-
-id_to_char,char_to_id = create_dictionaries(unique_characters)
-
-print('The first 4 elements of dict [id_to_char] as sample:')
-x = itertools.islice(id_to_char.items(), 0, 4)
-for key, value in x:
-    print (key, value)
-    
-print('\nThe first 4 elements of dict [char_to_id] as sample:')
-y = itertools.islice(char_to_id.items(), 0, 4)
-for key, value in y:
-    print (key, value)
 
 
 # # Corpus words as integers
@@ -289,32 +207,6 @@ def extract_corpus_as_integers(corpus,vocab_to_id,level='words'):
             corpus_as_int.append(vocab_to_id[char])
             
     return corpus_as_int
-
-
-# With **words**
-
-# In[20]:
-
-corpus_by_words_as_int = extract_corpus_as_integers(corpus,vocab_to_id)
-print('Same text: as integers, as words:')
-print(corpus_by_words_as_int[0:10])
-list_words_as_words = []
-for ix in corpus_by_words_as_int[0:10]:
-    list_words_as_words.append(id_to_vocab[ix])
-print(list_words_as_words)
-
-
-# With **characters**
-
-# In[21]:
-
-corpus_by_chars_as_int = extract_corpus_as_integers(corpus,char_to_id,level='chars')
-print('Same text, as integers, as words:')
-print(corpus_by_chars_as_int[0:10])
-list_chars_as_chars = []
-for ix in corpus_by_chars_as_int[0:10]:
-    list_chars_as_chars.append(id_to_char[ix])
-print(list_chars_as_chars)
 
 
 # # Build dataset 
@@ -370,34 +262,6 @@ def build_dataset(words, vocabulary_size):
     
     return data, count, dictionary, reverse_dictionary
     
-
-
-# In[30]:
-
-#Because the unique words size in the example corpus is ~15.000, with a vocabulary_size less than that, we'll have unknown words
-data,count,dictionary,reverse_dictionary = build_dataset(extract_words(corpus),vocabulary_size=10000)
-
-print('The first 4 elements of list that holds the counting [count] as sample:\n %s\n' % count[0:4])
-
-print('The first 4 elements of dict [dictionary] as sample:')
-x = itertools.islice(dictionary.items(), 0, 4)
-for key, value in x:
-    print (key, value)
-    
-print('\nThe first 4 elements of dict [reverse_dictionary] as sample:')
-x = itertools.islice(reverse_dictionary.items(), 0, 4)
-for key, value in x:
-    print (key, value)
-
-print('\nSame text: as integers, as words:')
-print(data[0:10])
-list_words_as_words = []
-for ix in data[0:10]:
-    list_words_as_words.append(reverse_dictionary[ix])
-print(list_words_as_words)
-
-
-
 # # Generate Word2Vec Batches
 
 # In[31]:
@@ -444,56 +308,6 @@ def generate_batch(data,batch_size=16,num_skips=1,skip_window=1):
     data_index = (data_index + len(data) - span) % len(data)
     return batch,labels
 
-
-# With **words**:
-
-# In[34]:
-
-batch,labels = generate_batch(data=corpus_by_words_as_int,batch_size=16,num_skips=1,skip_window=1)
-
-
-# In[35]:
-
-print('The generated batch is:\n%s\n' %batch)
-print('Translated to words are:')
-translation = []
-for ix in batch:
-    translation.append(id_to_vocab[ix])
-print(translation)
-
-print('\nThe generated labels for the batch are:\n%s\n' %labels.reshape(-1))
-print('Translated to words are:')
-translation = []
-for ix in labels.reshape(-1):
-    translation.append(id_to_vocab[ix])
-print(translation)
-
-
-# With **characters**
-
-# In[36]:
-
-batch,labels = generate_batch(data=corpus_by_chars_as_int,batch_size=16,num_skips=1,skip_window=1)
-
-
-# In[38]:
-
-print('The generated batch is:\n%s\n' %batch)
-print('Translated to characters are:')
-translation = []
-for ix in batch:
-    translation.append(id_to_char[ix])
-print(translation)
-
-print('\nThe generated labels for the batch are:\n%s\n' %labels.reshape(-1))
-print('Translated to words are:')
-translation = []
-for ix in labels.reshape(-1):
-    translation.append(id_to_char[ix])
-print(translation)
-
-
-# In[ ]:
 
 
 
