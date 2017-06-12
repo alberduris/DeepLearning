@@ -20,6 +20,8 @@ import codecs
 import nltk
 import re
 import numpy as np
+import collections
+
 
 
 # # Read Corpus Data
@@ -309,5 +311,50 @@ def generate_batch(data,batch_size=16,num_skips=1,skip_window=1):
     return batch,labels
 
 
+def rnn_minibatch_sequencer(raw_data, batch_size, sequence_size, nb_epochs,num_features,num_classes):
+    """
+    Divides the data into batches of sequences so that all the sequences in one batch
+    continue in the next batch. This is a generator that will keep returning batches
+    until the input data has been seen nb_epochs times. Sequences are continued even
+    between epochs, apart from one, the one corresponding to the end of raw_data.
+    The remainder at the end of raw_data that does not fit in an full batch is ignored.
+    :param raw_data: the training text
+    :param batch_size: the size of a training minibatch
+    :param sequence_size: the unroll size of the RNN
+    :param nb_epochs: number of epochs to train on
+    :return:
+        x: one batch of training sequences
+        y: on batch of target sequences, i.e. training sequences shifted by 1
+        epoch: the current epoch number (starting at 0)
+    """
+    data = np.array(raw_data)
+    data_len = data.shape[0]
+    
+    #Number of batches per epoch
+    # using (data_len-1) because we must provide for the sequence shifted by 1 too <- Not want X without Y
+    nb_batches = (data_len - 1) // (batch_size * sequence_size) 
 
+    assert nb_batches > 0, "Not enough data, even for a single batch. Try using a smaller batch_size."
+    
+    #How many train data will be used - Divisible by (batch_size*sequence_size)
+    rounded_data_len = nb_batches * batch_size * sequence_size
+    
+    #Divide data into batch size sequences of data
+    xdata = np.reshape(a=data[0:rounded_data_len], newshape=[batch_size, nb_batches * sequence_size, num_features])
+    #Y data is just +1
+    ydata = np.reshape(a=data[1:rounded_data_len + 1], newshape=[batch_size, nb_batches * sequence_size, num_classes])
+    
+    for epoch in range(nb_epochs): #For each epoch
+        for batch in range(nb_batches): #For each batch inside epoch
+            
+            
+            #Fragment the sequence into [sequence_size] slices
+            x = xdata[:, batch * sequence_size:(batch + 1) * sequence_size]
+            y = ydata[:, batch * sequence_size:(batch + 1) * sequence_size]
+            
+            #To not lose the sequence between epochs
+            x = np.roll(x, -epoch, axis=0)  # to continue the text from epoch to epoch (do not reset rnn state!)
+            y = np.roll(y, -epoch, axis=0)
+            
+            yield x, y, epoch
 
