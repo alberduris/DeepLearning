@@ -21,7 +21,9 @@ import nltk
 import re
 import numpy as np
 import collections
-
+import string
+import random
+import warnings
 
 
 # # Read Corpus Data
@@ -68,6 +70,34 @@ def read_and_merge_files(filenames,encoding='utf-8'):
         print()
     return corpus_raw
 
+#Clean corpus
+def clean_corpus_az(corpus,caps='all'):
+    '''
+    Cleans corpus removing every character except [a-z,A-Z]
+    args:
+    corpus: A 'str' with the corpus to clean
+    caps: Selects characters to retain by case
+    'all' -> Lower and Upper case
+    'lower' -> Just lower case
+    'upper' -> Just upper case
+    return:
+    The cleaned corpus.
+    '''
+    assert type(corpus) is str, "corpus is not a string: %r" % corpus
+    
+    if(caps=='all'):
+        clean = re.sub("[^a-zA-Z]"," ",corpus)
+        clean = ' '.join(clean.split())
+    elif(caps=='lower'):
+        corpus = corpus.lower()
+        clean = re.sub("[^a-z]"," ",corpus)
+        clean = ' '.join(clean.split())
+    elif(caps=='upper'):
+        corpus = corpus.upper()
+        clean = re.sub("[^A-Z]"," ",corpus)
+        clean = ' '.join(clean.split())
+    
+    return clean
 
 # # Extract sentences from corpus
 
@@ -268,7 +298,7 @@ def build_dataset(words, vocabulary_size):
 
 # In[31]:
 
-def generate_batch(data,batch_size=16,num_skips=1,skip_window=1):
+def w2v_generate_batch(data,batch_size=16,num_skips=1,skip_window=1):
     """Return batch and label from data
     args:
     data: A list of 'int'
@@ -357,4 +387,372 @@ def rnn_minibatch_sequencer(raw_data, batch_size, sequence_size, nb_epochs,num_f
             y = np.roll(y, -epoch, axis=0)
             
             yield x, y, epoch
+  
 
+
+#################################################BATCH MANAGER#################################################
+
+#@TODO: num_epochs
+#@TODO: generate_batch
+#@TODO: one_hot
+
+class BatchManager(object):
+
+    def __init__(self):
+        self._filename = ""
+
+        self._text = u""
+        self._text_size = -1
+        
+        self._vocab = list()
+        self._vocab_size = -1
+        self._vocab_strategy = 'all'
+
+        self._mode = 'dense'
+        
+        self._batch_size = 16
+        self._seq_length = 50
+        self._overlap = 25
+
+        self._num_batches = -1
+
+    def set_params(self,filename,batch_size,seq_length,overlap,vocab_strategy,mode):
+
+        if(filename is not None):
+            self._filename = filename
+            #Read corpus
+            corpus_raw = u""
+            with codecs.open(filename,'r','utf-8') as file:
+                corpus_raw += file.read()
+                self._text = corpus_raw
+                self._text_size = len(corpus_raw)
+
+        if(batch_size is not None):
+            self._batch_size = batch_size
+        if(seq_length is not None):
+            self._seq_length = seq_length
+        if(overlap is not None):
+            self._overlap = overlap
+        if(vocab_strategy is not None):
+            self._vocab_strategy = vocab_strategy
+            self.create_vocab(self,strategy=self._vocab_strategy)
+
+        if(mode is not None):
+            self._mode = mode
+
+        if(self._batch_size is not None and self._seq_length is not None and self._overlap is not None):
+            self.get_num_batches()
+
+
+    def get_params(self):
+
+        print('@params:')
+        print('[filename : "%s"]' % self._filename)
+        print('[text : "%s"]' % self._text[0:10])
+        print('[text_size : %s]' % self._text_size)
+        print('[vocab : %s]' % self._vocab[0:5])
+        print('[vocab_size : %s]' % self._vocab_size)
+        print('[batch_size : %s]' % self._batch_size)
+        print('[seq_length : %s]' % self._seq_length)
+        print('[overlap : %s]' % self._overlap)
+        print('[num_batches : %s]' % self._num_batches)
+
+
+
+    def create_vocab(self,filename, strategy = 'all'):
+
+        if(self._text_size == 0):
+            #Read corpus
+            corpus_raw = u""
+            with codecs.open(filename,'r','utf-8') as file:
+                corpus_raw += file.read()
+                self._text = corpus_raw
+                self._text_size = len(corpus_raw)
+
+        if(strategy == 'all'):
+            vocab = list(set(self._text))
+        elif(strategy == 'az'):
+            corpus_raw = self._text.lower()
+            clean = re.sub("[^a-z]"," ",corpus_raw)
+        elif(strategy == 'az_num'):
+            corpus_raw = self._text.lower()
+            clean = re.sub("[^a-z0-9]"," ",corpus_raw)
+
+
+        self._vocab = vocab
+        self._vocab_size = len(vocab)
+        return vocab
+
+
+    def read_data(self):
+
+        if(self._text_size == 0):
+            warnings.warn("Text not defined - Halting. Define a file before proceed. Use BatchManager.set_params()", UserWarning)
+            sys.exit(0)
+        if(len(self._vocab) == 0):
+            warnings.warn("Vocabulary not defined. Defining default vocabulary. You can define vocabulary with BatchManager.create_vocab()", UserWarning)
+            self.create_vocab(filename)
+
+        
+        text = self._text
+        text = self.vocab_encode(text)
+
+        for start in range(0, self._text_size - self._seq_length, self._overlap):
+            xData = text[start: start + self._seq_length]
+            xData += [0] * (self._seq_length - len(xData))
+
+            yData = text[start+1: start + self._seq_length+1]
+            yData += [0] * (self._seq_length - len(yData))
+            yield xData,yData
+
+    
+    #Generate batches
+    def read_batch(self,stream):
+        batchX = []
+        batchY = []
+        for elemX,elemY in stream:
+            batchX.append(elemX)
+            batchY.append(elemY)
+            if len(batchX) == self._batch_size:
+                yield batchX,batchY
+                batchX = []
+                batchY = []
+        #yield batchX,batchY
+
+    def generate_batches(self,num_epochs=1):
+        for epoch in range(num_epochs):
+            for batchX,batchY in self.read_batch(self.read_data()):
+                yield batchX,batchY,epoch
+
+
+    def vocab_encode(self,text):
+        return [self._vocab.index(x) + 1 for x in text if x in self._vocab]
+
+
+    def vocab_decode(self,list_ids):
+        return ''.join([self._vocab[x - 1] for x in list_ids])
+
+
+    def stats(self):
+
+
+
+        print('The corpus has %d characters' %self._text_size)
+        print('Configuration:\n[batch_size : %d]\n[seq_length : %d]\n[overlap : %d]\n' % (self._batch_size, self._seq_length, self._overlap))
+
+        print('The current configuration gives us %d batches of %d observations each one looking %d steps in the past and overlapping %d steps' 
+            %(self.get_num_batches(),self._batch_size,self._seq_length, (self._seq_length-self._overlap)))
+
+
+    def get_num_batches(self):
+        self._num_batches = (self._text_size-1) // (self._batch_size * (self._seq_length - (self._seq_length-self._overlap)))
+        return self._num_batches
+
+#################################################END-STANDFORD#################################################
+
+            
+#################################################ONE-HOT-SPARSE#################################################
+
+
+
+vocabulary_size = len(string.ascii_lowercase) + 1 # [a-z] + ' '
+#Unicode code point for a one-character string
+first_letter = ord(string.ascii_lowercase[0])
+
+'''
+@post: Dado un char devuelve su identificar basado en Unicode code point
+'''
+def char2id(char):
+    if char in string.ascii_lowercase:
+        return ord(char) - first_letter + 1
+    elif char == ' ':
+        return 0
+    else:
+        print('Unexpected character: %s' % char)
+    return 0
+
+'''
+@post: Dado un id propio, devuelve el char asociado
+'''
+def id2char(dictid):
+    if dictid > 0:
+        return chr(dictid + first_letter - 1)
+    else:
+        return ' '
+
+batch_size=1
+num_unrollings=3
+
+###ONE HOT
+class BatchGenerator(object):
+    def __init__(self, text, batch_size, num_unrollings):
+        
+        #Params
+        self._text = text #The raw text as str - Output of NLP_Utils.read_data()
+        self._text_size = len(text)
+        self._batch_size = batch_size
+        self._num_unrollings = num_unrollings
+
+        #The size of each fragment (batches) the data can be divided in
+        #Ie: A text w/ 100 characters and batch size 2 gives 2 fragments of size 50. Segment is 50.
+        segment = self._text_size // batch_size
+
+        #The starting position for each fragment
+        self._cursor = [ offset * segment for offset in range(batch_size)]
+        
+        #First characters for each fragment or batch instance
+        self._last_batch = self._next_batch()
+
+
+    def _next_batch(self):
+        """Extracts one character for each batch instance"""
+        """Generate a single batch from the current cursor position in the data."""
+        batch = np.zeros(shape=(self._batch_size, vocabulary_size), dtype=np.float)
+        for b in range(self._batch_size):
+            batch[b, char2id(self._text[self._cursor[b]])] = 1.0
+            self._cursor[b] = (self._cursor[b] + 1) % self._text_size
+        return batch
+
+    def next(self):
+        """Generates the subsequent (seq_length) characters for each fragment or batch instance"""
+        """Generate the next array of batches from the data. The array consists of
+        the last batch of the previous array, followed by num_unrollings new ones.
+        """
+        batches = [self._last_batch]
+        for step in range(self._num_unrollings):
+          batches.append(self._next_batch())
+        self._last_batch = batches[-1]
+        return batches
+
+    def characters(self,probabilities):
+        """Turn a 1-hot encoding or a probability distribution over the possible
+        characters back into its (mostl likely) character representation."""
+        return [id2char(c) for c in np.argmax(probabilities, 1)]
+
+    def batches2string(self,batches):
+        """Convert a sequence of batches back into their (most likely) string
+        representation."""
+        s = [''] * batches[0].shape[0]
+        for b in batches:
+            s = [''.join(x) for x in zip(s, BatchGenerator.characters(self,b))]
+        return s
+
+
+    '@post: Log-probability of the true labels in a predicted batch'
+    def logprob(self,predictions, labels):
+        
+        predictions[predictions < 1e-10] = 1e-10
+        return np.sum(np.multiply(labels, -np.log(predictions))) / labels.shape[0]
+
+    '@post: Sample one element from a distribution assumed to be an array of normalized probabilities.'
+    def sample_distribution(self,distribution):
+        r = random.uniform(0, 1)
+        s = 0
+        for i in range(len(distribution)):
+            s += distribution[i]
+            if s >= r:
+                return i
+        return len(distribution) - 1
+
+    '@post: Turn a (column) prediction into 1-hot encoded samples.'
+    def sample(self,prediction):
+        p = np.zeros(shape=[1, vocabulary_size], dtype=np.float)
+        p[0, BatchGenerator.sample_distribution(self,prediction[0])] = 1.0
+        return p
+
+    '@post: Generate a random column of probabilities.'
+    def random_distribution(self):
+        b = np.random.uniform(0.0, 1.0, size=[1, vocabulary_size])
+        return b/np.sum(b, 1)[:,None]
+
+
+
+########SPARSE
+
+class BatchGeneratorSparse(object):
+    def __init__(self, text, batch_size, num_unrollings):
+        
+        #Params
+        self._text = text #The raw text as str - Output of NLP_Utils.read_data()
+        self._text_size = len(text)
+        self._batch_size = batch_size
+        self._num_unrollings = num_unrollings
+
+        #The size of each fragment (batches) the data can be divided in
+        #Ie: A text w/ 100 characters and batch size 2 gives 2 fragments of size 50. Segment is 50.
+        segment = self._text_size // batch_size
+
+        #The starting position for each fragment
+        self._cursor = [ offset * segment for offset in range(batch_size)]
+        
+        #First characters for each fragment or batch instance
+        self._last_batch = self._next_batch_sparse()
+
+
+
+
+    def _next_batch_sparse(self):
+        """Extracts one character for each batch instance"""
+        """Generate a single batch from the current cursor position in the data."""
+        batch = np.zeros(shape=(self._batch_size, 1), dtype=np.float)
+        for b in range(self._batch_size):
+            batch[b, 0] = char2id(self._text[self._cursor[b]])
+            self._cursor[b] = (self._cursor[b] + 1) % self._text_size
+        return batch
+
+    def next_sparse(self):
+        """Generates the subsequent (seq_length) characters for each fragment or batch instance"""
+        """Generate the next array of batches from the data. The array consists of
+        the last batch of the previous array, followed by num_unrollings new ones.
+        """
+        batches = [self._last_batch]
+        for step in range(self._num_unrollings):
+          batches.append(self._next_batch_sparse())
+        self._last_batch = batches[-1]
+        return batches
+
+    
+    def characters_sparse(self,char_ids):
+        """Turn a 1-hot encoding or a probability distribution over the possible
+        characters back into its (mostl likely) character representation."""
+        return [id2char(c) for c in char_ids]
+
+    def batches2string_sparse(self,batches):
+        """Convert a sequence of batches back into their (most likely) string
+        representation."""
+        s = [''] * batches[0].shape[0]
+        for b in batches:
+            s = [''.join(x) for x in zip(s, BatchGeneratorSparse.characters_sparse(self,b))]
+
+        return s
+
+
+    '@post: Log-probability of the true labels in a predicted batch'
+    def logprob(self,predictions, labels):
+        
+        predictions[predictions < 1e-10] = 1e-10
+        return np.sum(np.multiply(labels, -np.log(predictions))) / labels.shape[0]
+
+    '@post: Sample one element from a distribution assumed to be an array of normalized probabilities.'
+    def sample_distribution(self,distribution):
+        r = random.uniform(0, 1)
+        s = 0
+        for i in range(len(distribution)):
+            s += distribution[i]
+            if s >= r:
+                return i
+        return len(distribution) - 1
+
+    '@post: Turn a (column) prediction into 1-hot encoded samples.'
+    def sample(self,prediction):
+        p = np.zeros(shape=[1, vocabulary_size], dtype=np.float)
+        p[0, BatchGenerator.sample_distribution(self,prediction[0])] = 1.0
+        return p
+
+    '@post: Generate a random column of probabilities.'
+    def random_distribution(self):
+        b = np.random.uniform(0.0, 1.0, size=[1, vocabulary_size])
+        return b/np.sum(b, 1)[:,None]
+
+
+#################################################ONE-HOT-SPARSE#################################################
