@@ -12,3 +12,12 @@ I personally think that they're some of the best RNN-Tensorflow tutorial out the
 ## Recurrent Neural Networks in Tensorflow I
 
 A vanilla recurrent neural network (RNN) is implemented from the ground up in Tensorflow, and then translate the model into Tensorflow’s RNN Static & Dynamic API.
+
+## Recurrent Neural Networks in Tensorflow II
+
+A MultiLSTM Recurrent Neural Network is built on Tensorflow based on the Vanilla model we previously implemented.
+
+## Recurrent Neural Networks in Tensorflow III
+
+Several RNN models suited for Variable Sequence Length data are implemented in Tensorflow, including a simple Seq2Seq model.
+
